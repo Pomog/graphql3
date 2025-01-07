@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .section {
+            margin-bottom: 20px;
+        }
+        .section h2 {
+            font-size: 18px;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        .logout-btn {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+        }
+        .logout-btn:hover {
+            background-color: #a71d2a;
+        }
+        .graphs {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .graph {
+            flex: 1;
+            min-width: 300px;
+            height: 200px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Your Profile</h1>
+
+    <!-- Basic User Info Section -->
+    <div class="section" id="user-info">
+        <h2>Basic Information</h2>
+        <p><strong>ID:</strong> <span id="user-id"></span></p>
+        <p><strong>Username:</strong> <span id="user-login"></span></p>
+    </div>
+
+    <!-- Statistics Section -->
+    <div class="section" id="statistics">
+        <h2>Statistics</h2>
+        <div class="graphs">
+            <!-- Graphs will be generated dynamically -->
+            <svg class="graph" id="xp-graph"></svg>
+            <svg class="graph" id="audit-ratio-graph"></svg>
+        </div>
+    </div>
+
+    <!-- Logout Button -->
+    <a href="index.html" class="logout-btn" id="logout-btn">Log Out</a>
+</div>
+
+<script>
+    const jwt = localStorage.getItem('jwt');
+    const userid = localStorage.getItem('userid')
+    if (!jwt || !userid) {
+        alert('You must log in first!');
+        window.location.href = 'index.html';
+    }
+
+
+    async function fetchUserData() {
+            let user = await getUser(userid);
+
+            if (user === undefined) {
+                alert('Failed to load profile. Please log in again.');
+                //window.location.href = 'index.html';
+            }
+
+            console.log(user);
+            //displayUserData(data.data);
+            //generateGraphs(data.data);
+    }
+
+    async function getUser(userId) {
+        const data = await queryAPI(
+            `
+		query getId($user: String){
+		    user(where: { login: { _eq: $user }}){
+		        id,
+				login
+		    }
+		}
+		`,
+            { user: userId }
+        );
+        console.log("data", data)
+        return data;
+    }
+
+    /**
+     * Sends a GraphQL query and returns the response data in a promise
+     * @param {String} query
+     * @param {Object} variables
+     * @returns {Promise<Object>}
+     */
+    async function queryAPI(query, variables = {}) {
+        return fetch("https://01.kood.tech/api/graphql-engine/v1/graphql", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({query, variables})
+        })
+            .then(res => res.json())
+            .then(data => {
+                if ("errors" in data) throw data.errors
+                return data["data"]
+            })
+    }
+
+    function displayUserData(data) {
+        console.log(data);
+        document.getElementById('user-id').textContent = data.user[0]?.id || 'N/A';
+        document.getElementById('user-login').textContent = data.user[0]?.login || 'N/A';
+    }
+
+    function generateGraphs(data) {
+        const xpGraph = document.getElementById('xp-graph');
+        const auditGraph = document.getElementById('audit-ratio-graph');
+
+        // Generate XP over time graph
+        const xpData = data.transaction.map(t => t.amount);
+        const xpMax = Math.max(...xpData, 1);
+        xpData.forEach((xp, index) => {
+            const barHeight = (xp / xpMax) * 100;
+            const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            bar.setAttribute('x', index * 30 + 10);
+            bar.setAttribute('y', 100 - barHeight);
+            bar.setAttribute('width', 20);
+            bar.setAttribute('height', barHeight);
+            bar.setAttribute('fill', '#007BFF');
+            xpGraph.appendChild(bar);
+        });
+
+        // Generate Audit ratio graph
+        const passCount = data.progress.filter(p => p.grade === 1).length;
+        const failCount = data.progress.filter(p => p.grade === 0).length;
+        const total = passCount + failCount;
+        const passPercentage = (passCount / total) * 360;
+        const failPercentage = 360 - passPercentage;
+
+        const passSlice = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        passSlice.setAttribute('r', 50);
+        passSlice.setAttribute('cx', 100);
+        passSlice.setAttribute('cy', 100);
+        passSlice.setAttribute('fill', 'none');
+        passSlice.setAttribute('stroke', '#28a745');
+        passSlice.setAttribute('stroke-width', 10);
+        passSlice.setAttribute('stroke-dasharray', `${passPercentage} ${360 - passPercentage}`);
+        passSlice.setAttribute('transform', 'rotate(-90 100 100)');
+        auditGraph.appendChild(passSlice);
+
+        const failSlice = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        failSlice.setAttribute('r', 50);
+        failSlice.setAttribute('cx', 100);
+        failSlice.setAttribute('cy', 100);
+        failSlice.setAttribute('fill', 'none');
+        failSlice.setAttribute('stroke', '#dc3545');
+        failSlice.setAttribute('stroke-width', 10);
+        failSlice.setAttribute('stroke-dasharray', `${failPercentage} ${360 - failPercentage}`);
+        failSlice.setAttribute('transform', 'rotate(-90 100 100)');
+        auditGraph.appendChild(failSlice);
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+        localStorage.removeItem('jwt');
+    });
+
+    fetchUserData();
+</script>
+</body>
+</html>
