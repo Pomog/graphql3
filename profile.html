@@ -94,6 +94,9 @@
         window.location.href = 'index.html';
     }
 
+    alert(jwt);
+    alert(userid);
+
 
     async function fetchUserData() {
         try {
@@ -123,7 +126,7 @@
     `;
 
         const data = await queryAPI(query, { id: userId });
-        console.log("User data:", data);
+        alert(data);
         return data;
     }
 
