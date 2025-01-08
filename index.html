@@ -100,7 +100,8 @@
             });
 
             if (response.ok) {
-                const jwt = await response.text();
+                let jwt = await response.text();
+                jwt = jwt.replace(/^"|"$/g, '');
 
                 // Store JWT in local storage and redirect to profile page
                 localStorage.setItem('jwt', jwt);

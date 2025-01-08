@@ -78,6 +78,7 @@
         <h2>Basic Information</h2>
         <p><strong>ID:</strong> <span id="user-id"></span></p>
         <p><strong>Username:</strong> <span id="user-login"></span></p>
+        <p><strong>email:</strong> <span id="user-email"></span></p>
     </div>
 
     <!-- Statistics Section -->
@@ -107,12 +108,13 @@
         try {
             const userData = await getUserData(jwt);
             console.log(userData);
+            displayUserData(userData);
 
         } catch (error) {
             alert("error in fetchUserData");
             console.error('Error fetching user data:', error);
-            //alert('An error occurred while fetching the user data.');
-            // window.location.href = 'index.html'; // Redirect on error
+            alert('An error occurred while fetching the user data.');
+            window.location.href = 'index.html'; // Redirect on error
         }
     }
 
@@ -154,6 +156,9 @@
             body: JSON.stringify({query})
         });
 
+        console.log(JSON.stringify({query}))
+        console.log(JWToken)
+
         if (!response.ok) {
             console.error("Error in response:", response.statusText);
             return null;
@@ -165,10 +170,11 @@
 
     function displayUserData(data) {
         console.log(data); // Log to see the structure of `data`
-        const user = data.user ? data.user[0] : null; // Adjust based on actual structure
+        const user = data.data && data.data.user ? data.data.user[0] : null;
         if (user) {
             document.getElementById('user-id').textContent = user.id || 'N/A';
             document.getElementById('user-login').textContent = user.login || 'N/A';
+            document.getElementById('user-email').textContent = user.attrs.email || 'N/A';
         } else {
             alert('User data not found.');
         }
