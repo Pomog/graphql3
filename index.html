@@ -86,6 +86,7 @@
     const errorMessage = document.getElementById('error-message');
 
     form.addEventListener('submit', async (event) => {
+        localStorage.clear();
         event.preventDefault();
         const username = form.username.value;
         const password = form.password.value;
@@ -100,14 +101,14 @@
 
             if (response.ok) {
                 const jwt = await response.text();
-                console.log('JWT:', jwt);
+
                 // Store JWT in local storage and redirect to profile page
                 localStorage.setItem('jwt', jwt);
-                console.log(jwt);
+
                 const decodedJWT = decodeJWT(jwt);
-                console.log(decodedJWT);
+
                 const userId = decodedJWT["https://hasura.io/jwt/claims"]["x-hasura-user-id"];
-                console.log(userId);
+
                 // Store User ID in local storage and redirect to profile page
                 localStorage.setItem('userid', userId);
                 window.location.href = 'profile.html';

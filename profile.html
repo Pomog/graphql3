@@ -11,6 +11,7 @@
             margin: 0;
             padding: 0;
         }
+
         .container {
             max-width: 800px;
             margin: 20px auto;
@@ -19,18 +20,22 @@
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
+
         h1 {
             text-align: center;
             color: #333;
         }
+
         .section {
             margin-bottom: 20px;
         }
+
         .section h2 {
             font-size: 18px;
             color: #555;
             margin-bottom: 10px;
         }
+
         .logout-btn {
             display: block;
             margin: 20px auto;
@@ -43,14 +48,17 @@
             text-align: center;
             text-decoration: none;
         }
+
         .logout-btn:hover {
             background-color: #a71d2a;
         }
+
         .graphs {
             display: flex;
             gap: 20px;
             flex-wrap: wrap;
         }
+
         .graph {
             flex: 1;
             min-width: 300px;
@@ -94,68 +102,65 @@
         window.location.href = 'index.html';
     }
 
-    alert(jwt);
-    alert(userid);
-
-
     async function fetchUserData() {
+        console.log(jwt);
         try {
-            const user = await getUser(userid);
-            if (!user || !user.user || user.user.length === 0) {
-                //alert('Failed to load profile. Please log in again.');
-                //window.location.href = 'index.html'; // Redirect on error
-            } else {
-                //displayUserData(user); // Display data if available
-            }
+            const userData = await getUserData(jwt);
+            console.log(userData);
+
         } catch (error) {
+            alert("error in fetchUserData");
             console.error('Error fetching user data:', error);
             //alert('An error occurred while fetching the user data.');
-           // window.location.href = 'index.html'; // Redirect on error
+            // window.location.href = 'index.html'; // Redirect on error
         }
     }
 
-
-    async function getUser(userId) {
-        const query = `
-            query getUser($id: Int!) {
-                user(where: { id: { _eq: $id } }) {
-                    id
-                    login
-                }
-            }
-    `;
-
-        const data = await queryAPI(query, { id: userId });
-        alert(data);
-        return data;
+    /*
+    {
+      user(where: { id: { _eq: 9935 } }) {
+        id
+        login
+      }
     }
+     */
 
-    async function queryAPI(query, variables = {}) {
+    async function getUserData(JWToken) {
+        const query = `{
+            user {
+                id
+                login
+                attrs
+            }
+        }`;
+
         try {
-            const jwt = localStorage.getItem('jwt');
-            const response = await fetch("https://01.kood.tech/api/graphql-engine/v1/graphql", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${jwt}`  // Add Authorization header with JWT token
-                },
-                body: JSON.stringify({ query, variables }),
-            });
-
-            const data = await response.json();
-            console.log("API Response:", data);  // Log the API response to see errors
-            if (data.errors) {
-                console.error("API Errors:", data.errors);
-            }
-
-            return data.data; // Return the data part of the response
+            const data = await makeGraphQLRequest(query, JWToken);
+            return data;
         } catch (error) {
-            console.error("GraphQL query failed:", error);
-            throw error; // Re-throw the error for further handling
+            console.error("Error fetching user data:", error);
+            localStorage.clear();
+            return null;
         }
     }
 
+    async function makeGraphQLRequest(query, JWToken) {
+        const response = await fetch('https://01.kood.tech/api/graphql-engine/v1/graphql', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${JWToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({query})
+        });
 
+        if (!response.ok) {
+            console.error("Error in response:", response.statusText);
+            return null;
+        }
+
+        return await response.json();
+    }
 
 
     function displayUserData(data) {
