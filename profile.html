@@ -79,6 +79,7 @@
         <p><strong>ID:</strong> <span id="user-id"></span></p>
         <p><strong>Username:</strong> <span id="user-login"></span></p>
         <p><strong>email:</strong> <span id="user-email"></span></p>
+        <p><strong>Audit Ratio:</strong> <span id="audit-ratio"></span></p>
     </div>
 
     <!-- Statistics Section -->
@@ -106,9 +107,11 @@
     async function fetchUserData() {
         console.log(jwt);
         try {
-            const userData = await getUserData(jwt);
-            console.log(userData);
+            let response = await getUserData(jwt);
+            let userData = response.data && response.data.user ? response.data.user[0] : null;
             displayUserData(userData);
+            let auditData = await auditsQuery(userid, jwt);
+            displayAuditData(auditData);
 
         } catch (error) {
             alert("error in fetchUserData");
@@ -118,17 +121,37 @@
         }
     }
 
-    /*
-    {
-      user(where: { id: { _eq: 9935 } }) {
-        id
-        login
-      }
+    function displayAuditData(auditData){
+        let auditRatio = auditData.data.user[0]?.auditRatio ?? 'N/A';
+        if (auditRatio) {
+            document.getElementById('audit-ratio').textContent = auditRatio.toFixed(2) || 'N/A';
+        } else {
+            alert("Invalid audit data");
+        }
+
     }
-     */
+
+    async function auditsQuery(userId, JWToken){
+        let query = `{
+              user(where: { id: { _eq: ${userId} } }) {
+                auditRatio
+              }
+              audit (where: { auditorId: { _eq: ${userId} } }) {
+                grade
+              }
+        }`;
+
+        try {
+            return await makeGraphQLRequest(query, JWToken);
+        } catch (error) {
+            console.error("Error fetching user data:", error);
+            localStorage.clear();
+            return null;
+        }
+    }
 
     async function getUserData(JWToken) {
-        const query = `{
+        let query = `{
             user {
                 id
                 login
@@ -137,8 +160,7 @@
         }`;
 
         try {
-            const data = await makeGraphQLRequest(query, JWToken);
-            return data;
+            return await makeGraphQLRequest(query, JWToken);
         } catch (error) {
             console.error("Error fetching user data:", error);
             localStorage.clear();
@@ -156,9 +178,6 @@
             body: JSON.stringify({query})
         });
 
-        console.log(JSON.stringify({query}))
-        console.log(JWToken)
-
         if (!response.ok) {
             console.error("Error in response:", response.statusText);
             return null;
@@ -168,9 +187,7 @@
     }
 
 
-    function displayUserData(data) {
-        console.log(data); // Log to see the structure of `data`
-        const user = data.data && data.data.user ? data.data.user[0] : null;
+    function displayUserData(user){
         if (user) {
             document.getElementById('user-id').textContent = user.id || 'N/A';
             document.getElementById('user-login').textContent = user.login || 'N/A';
