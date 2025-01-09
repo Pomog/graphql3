@@ -112,6 +112,8 @@
             let auditData = await auditsQuery(userid, jwt);
             displayAuditData(auditData);
 
+            console.log(await getXP(userid, jwt));
+
         } catch (error) {
             alert("error in fetchUserData");
             console.error('Error fetching user data:', error);
@@ -128,6 +130,20 @@
             alert("Invalid audit data");
         }
 
+    }
+
+    async function getXP(userId, JWToken) {
+        let query = `{
+        transaction(where: { userId: { _eq: ${userId} }, type: { _eq: "xp" } }) {
+            amount
+            createdAt
+            path
+            objectId
+            eventId
+            campus
+        }
+    }`;
+           return  await makeGraphQLRequest(query, JWToken);
     }
 
     async function auditsQuery(userId, JWToken){
