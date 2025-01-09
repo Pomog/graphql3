@@ -105,7 +105,6 @@
     }
 
     async function fetchUserData() {
-        console.log(jwt);
         try {
             let response = await getUserData(jwt);
             let userData = response.data && response.data.user ? response.data.user[0] : null;
