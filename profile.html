@@ -66,19 +66,39 @@
             border: 1px solid #ccc;
             border-radius: 4px;
             padding: 10px;
+            position: relative;
+        }
+
+        .graph path {
+            stroke-linecap: round;
+            stroke-width: 2;
+        }
+
+        .graph text {
+            font-size: 12px;
+            fill: #555;
+        }
+
+        .graph line {
+            stroke: #ccc;
+            stroke-width: 1;
+        }
+
+        .graph rect:hover {
+            fill: #1c7c1c;
         }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>Your Profile</h1>
+    <h1>Profile</h1>
 
     <!-- Basic User Info Section -->
     <div class="section" id="user-info">
         <h2>Basic Information</h2>
         <p><strong>ID:</strong> <span id="user-id"></span></p>
         <p><strong>Username:</strong> <span id="user-login"></span></p>
-        <p><strong>email:</strong> <span id="user-email"></span></p>
+        <p><strong>Email:</strong> <span id="user-email"></span></p>
         <p><strong>Audit Ratio:</strong> <span id="audit-ratio"></span></p>
     </div>
 
@@ -86,8 +106,9 @@
     <div class="section" id="statistics">
         <h2>Statistics</h2>
         <div class="graphs">
-            <!-- Graphs will be generated dynamically -->
+            <!-- Line Graph for XP Over Time -->
             <svg class="graph" id="xp-graph"></svg>
+            <!-- Bar Graph for XP by Project -->
             <svg class="graph" id="audit-ratio-graph"></svg>
         </div>
     </div>
@@ -98,7 +119,7 @@
 
 <script>
     const jwt = localStorage.getItem('jwt');
-    const userid = localStorage.getItem('userid')
+    const userid = localStorage.getItem('userid');
     if (!jwt || !userid) {
         alert('You must log in first!');
         window.location.href = 'index.html';
@@ -106,109 +127,38 @@
 
     async function fetchUserData() {
         try {
-            let response = await getUserData(jwt);
-            let userData = response.data && response.data.user ? response.data.user[0] : null;
-            displayUserData(userData);
-            let auditData = await auditsQuery(userid, jwt);
-            displayAuditData(auditData);
+            const response = await makeGraphQLRequest(`{
+                transaction {
+                    amount
+                    createdAt
+                    path
+                }
+                user(where: { id: { _eq: ${userid} } }) {
+                    id
+                    login
+                    attrs
+                    auditRatio
+                }
+            }`, jwt);
 
-            console.log(await getXP(userid, jwt));
-
-        } catch (error) {
-            alert("error in fetchUserData");
-            console.error('Error fetching user data:', error);
-            alert('An error occurred while fetching the user data.');
-            window.location.href = 'index.html'; // Redirect on error
-        }
-    }
-
-    function displayAuditData(auditData){
-        let auditRatio = auditData.data.user[0]?.auditRatio ?? 'N/A';
-        if (auditRatio) {
-            document.getElementById('audit-ratio').textContent = auditRatio.toFixed(2) || 'N/A';
-        } else {
-            alert("Invalid audit data");
-        }
-
-    }
-
-    async function getXP(userId, JWToken) {
-        let query = `{
-        transaction(where: { userId: { _eq: ${userId} }, type: { _eq: "xp" } }) {
-            amount
-            createdAt
-            path
-            objectId
-            eventId
-            campus
-        }
-    }`;
-           return  await makeGraphQLRequest(query, JWToken);
-    }
-
-    async function auditsQuery(userId, JWToken){
-        let query = `{
-              user(where: { id: { _eq: ${userId} } }) {
-                auditRatio
-              }
-              audit (where: { auditorId: { _eq: ${userId} } }) {
-                grade
-              }
-        }`;
-
-        try {
-            return await makeGraphQLRequest(query, JWToken);
-        } catch (error) {
-            console.error("Error fetching user data:", error);
-            localStorage.clear();
-            return null;
-        }
-    }
-
-    async function getUserData(JWToken) {
-        let query = `{
-            user {
-                id
-                login
-                attrs
+            if (response && response.data) {
+                displayUserData(response.data.user[0]);
+                generateGraphs(response.data);
+                console.log(response);
             }
-        }`;
-
-        try {
-            return await makeGraphQLRequest(query, JWToken);
         } catch (error) {
-            console.error("Error fetching user data:", error);
-            localStorage.clear();
-            return null;
+            alert("Error fetching user data.");
+            console.error('Error:', error);
+            window.location.href = 'index.html';
         }
     }
 
-    async function makeGraphQLRequest(query, JWToken) {
-        const response = await fetch('https://01.kood.tech/api/graphql-engine/v1/graphql', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${JWToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({query})
-        });
-
-        if (!response.ok) {
-            console.error("Error in response:", response.statusText);
-            return null;
-        }
-
-        return await response.json();
-    }
-
-
-    function displayUserData(user){
+    function displayUserData(user) {
         if (user) {
             document.getElementById('user-id').textContent = user.id || 'N/A';
             document.getElementById('user-login').textContent = user.login || 'N/A';
-            document.getElementById('user-email').textContent = user.attrs.email || 'N/A';
-        } else {
-            alert('User data not found.');
+            document.getElementById('user-email').textContent = user.attrs?.email || 'N/A';
+            document.getElementById('audit-ratio').textContent = user.auditRatio?.toFixed(2) || 'N/A';
         }
     }
 
@@ -216,48 +166,57 @@
         const xpGraph = document.getElementById('xp-graph');
         const auditGraph = document.getElementById('audit-ratio-graph');
 
-        // Generate XP over time graph
-        const xpData = data.transaction.map(t => t.amount);
-        const xpMax = Math.max(...xpData, 1);
-        xpData.forEach((xp, index) => {
-            const barHeight = (xp / xpMax) * 100;
-            const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            bar.setAttribute('x', index * 30 + 10);
-            bar.setAttribute('y', 100 - barHeight);
-            bar.setAttribute('width', 20);
-            bar.setAttribute('height', barHeight);
-            bar.setAttribute('fill', '#007BFF');
-            xpGraph.appendChild(bar);
+        const sortedData = data.transaction.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        const xpValues = sortedData.map(d => d.amount);
+
+        // Line Graph for XP Over Time
+        const linePath = xpValues.reduce((path, value, index) => {
+            const x = (index + 1) * 30;
+            const y = 200 - value / 100;
+            return `${path} L ${x} ${y}`;
+        }, `M 10 200`);
+
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        line.setAttribute('d', linePath);
+        line.setAttribute('stroke', '#007BFF');
+        line.setAttribute('fill', 'none');
+        xpGraph.appendChild(line);
+
+        // Bar Graph for XP by Project
+        const projectData = {};
+        sortedData.forEach(d => {
+            projectData[d.path] = (projectData[d.path] || 0) + d.amount;
         });
 
-        // Generate Audit ratio graph
-        const passCount = data.progress.filter(p => p.grade === 1).length;
-        const failCount = data.progress.filter(p => p.grade === 0).length;
-        const total = passCount + failCount;
-        const passPercentage = (passCount / total) * 360;
-        const failPercentage = 360 - passPercentage;
+        const barWidth = 25;
+        Object.values(projectData).forEach((value, index) => {
+            const x = index * (barWidth + 5) + 10;
+            const barHeight = value / 100;
+            const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            bar.setAttribute('x', x);
+            bar.setAttribute('y', 200 - barHeight);
+            bar.setAttribute('width', barWidth);
+            bar.setAttribute('height', barHeight);
+            bar.setAttribute('fill', '#28a745');
+            auditGraph.appendChild(bar);
+        });
+    }
 
-        const passSlice = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        passSlice.setAttribute('r', 50);
-        passSlice.setAttribute('cx', 100);
-        passSlice.setAttribute('cy', 100);
-        passSlice.setAttribute('fill', 'none');
-        passSlice.setAttribute('stroke', '#28a745');
-        passSlice.setAttribute('stroke-width', 10);
-        passSlice.setAttribute('stroke-dasharray', `${passPercentage} ${360 - passPercentage}`);
-        passSlice.setAttribute('transform', 'rotate(-90 100 100)');
-        auditGraph.appendChild(passSlice);
+    async function makeGraphQLRequest(query, token) {
+        const response = await fetch('https://01.kood.tech/api/graphql-engine/v1/graphql', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ query })
+        });
 
-        const failSlice = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        failSlice.setAttribute('r', 50);
-        failSlice.setAttribute('cx', 100);
-        failSlice.setAttribute('cy', 100);
-        failSlice.setAttribute('fill', 'none');
-        failSlice.setAttribute('stroke', '#dc3545');
-        failSlice.setAttribute('stroke-width', 10);
-        failSlice.setAttribute('stroke-dasharray', `${failPercentage} ${360 - failPercentage}`);
-        failSlice.setAttribute('transform', 'rotate(-90 100 100)');
-        auditGraph.appendChild(failSlice);
+        if (!response.ok) {
+            throw new Error('Failed to fetch data');
+        }
+
+        return await response.json();
     }
 
     document.getElementById('logout-btn').addEventListener('click', () => {
