@@ -145,6 +145,17 @@
                 displayUserData(response.data.user[0]);
                 generateGraphs(response.data);
                 console.log(response);
+
+                let extractedData = extractAndGroupData(response.data);
+                console.log(extractedData);
+
+                let xp = xpEarnedOverTime(extractedData);
+                console.log(xp);
+
+                let projects = groupByProject(extractedData);
+                console.log(projects)
+
+
             }
         } catch (error) {
             alert("Error fetching user data.");
@@ -152,6 +163,17 @@
             window.location.href = 'index.html';
         }
     }
+
+    function extractAndGroupData(data) {
+        return data.transaction.map(transaction => {
+            const pathParts = transaction.path.split('/');
+            const name = pathParts[2]; // Extract the second word in the path
+            const amount = parseInt(transaction.amount, 10); // Parse amount as integer
+            const date = transaction.createdAt.split('T')[0]; // Extract date (YYYY-MM-DD format)
+            return { name, amount, date };
+        });
+    }
+
 
     function displayUserData(user) {
         if (user) {
@@ -223,7 +245,33 @@
         localStorage.removeItem('jwt');
     });
 
+    function xpEarnedOverTime(data) {
+
+        let xpByDate = data.reduce((acc, {date, amount}) => {
+            acc[date] = (acc[date] || 0) + amount;
+            return acc;
+        }, {});
+
+        let cumulativeXP = [];
+        let totalXP = 0;
+        Object.keys(xpByDate).sort().forEach(date => {
+            totalXP += xpByDate[date];
+            cumulativeXP.push({date, xp: totalXP});
+        });
+
+        return cumulativeXP;
+    }
+
+    function groupByProject (data){
+        return data.reduce((acc, { name, amount }) => {
+            acc[name] = (acc[name] || 0) + amount;
+            return acc;
+        }, {});
+    }
+
+
     fetchUserData();
+
 </script>
 </body>
 </html>
