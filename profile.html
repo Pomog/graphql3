@@ -24,13 +24,17 @@
         <h2>Statistics</h2>
         <div class="graphs" id="xp-graph">
             <!-- Bar Graph for XP by Project -->
-            <svg class="graph" id="audit-ratio-graph">Sorry, your browser does not support inline SVG.  </svg>
+        </div>
+        <div class="graphs" id="graph-container">
+            <!-- Another Graph (XP Earned by Project) -->
         </div>
     </div>
 
     <!-- Logout Button -->
     <a href="index.html" class="logout-btn" id="logout-btn">Log Out</a>
 </div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
 
 <script>
     const jwt = localStorage.getItem('jwt');
@@ -64,9 +68,14 @@
                 let extractedData = extractAndGroupData(response.data);
                 console.log("extractedData: ", extractedData);
 
+                let extractedDataProj = extractAndGroupDataByProject(response.data);
+                console.log("extractedDataProj: ", extractedDataProj);
+
                 let xp = xpEarnedOverTime(extractedData);
                 console.log(xp);
                 createSvgPolylineGraph(xp, "xp-graph")
+
+                generateSVGGraph(extractedDataProj, "graph-container");
 
 
                 let projects = groupByProject(extractedData);
@@ -117,6 +126,33 @@
             const date = transaction.createdAt.split('T')[0]; // Extract date (YYYY-MM-DD format)
             return { name, amount, date };
         });
+    }
+
+    function extractAndGroupDataByProject(data) {
+        const groupedData = {};
+
+        data.transaction
+            .filter(transaction => {
+                // Check if path starts with '/johvi/div-01/' and has at least three '/' signs
+                const pathParts = transaction.path.split('/');
+                return transaction.path.startsWith('/johvi/div-01/') && pathParts.length >= 3;
+            })
+            .forEach(transaction => {
+                // Extract the last part of the path (after the third '/')
+                const pathParts = transaction.path.split('/');
+                const name = pathParts[pathParts.length - 1];  // Last part of the path
+                const amount = transaction.amount;  // Amount from transaction
+
+                // Accumulate amounts for the same name
+                if (groupedData[name]) {
+                    groupedData[name].amount += amount;
+                } else {
+                    groupedData[name] = { name, amount };
+                }
+            });
+
+        // Convert the groupedData object into an array
+        return Object.values(groupedData);
     }
 
 
@@ -207,6 +243,16 @@
         svg.setAttribute("height", height);
         svg.style.border = "1px solid black";
 
+        // Add title for the graph (Total XP Earned)
+        const title = document.createElementNS(svgNS, "text");
+        title.setAttribute("x", width / 2);
+        title.setAttribute("y", padding / 2);
+        title.setAttribute("text-anchor", "middle");
+        title.setAttribute("font-size", "20px");
+        title.setAttribute("font-weight", "bold");
+        title.textContent = "Total XP Earned";
+        svg.appendChild(title);
+
         // Create polyline
         const polyline = document.createElementNS(svgNS, "polyline");
         polyline.setAttribute("points", points);
@@ -274,8 +320,64 @@
 
 
 
+    function generateSVGGraph(data) {
+        const width = 800;
+        const height = 600;
+        const margin = 50;
+
+        const maxAmount = Math.max(...data.map(item => item.amount));
+        const xScale = d3.scaleBand().domain(data.map(d => d.name)).range([margin, width - margin]).padding(0.1);
+        const yScale = d3.scaleLinear().domain([0, maxAmount]).range([height - margin, margin]);
+
+        // Create the SVG container
+        const svg = d3.select("#xp-graph").append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        // Add a title for the graph
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", margin / 2)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "20px")
+            .attr("font-weight", "bold")
+            .text("XP Earned by Project");
+
+        // Draw the bars
+        svg.selectAll(".bar")
+            .data(data)
+            .enter().append("rect")
+            .attr("class", "bar")
+            .attr("x", d => xScale(d.name))
+            .attr("y", d => yScale(d.amount))
+            .attr("width", xScale.bandwidth())
+            .attr("height", d => height - margin - yScale(d.amount))
+            .attr("fill", "steelblue");
+
+        // Add x-axis
+        svg.selectAll(".x-axis")
+            .data([0])
+            .enter().append("g")
+            .attr("class", "x-axis")
+            .attr("transform", `translate(0,${height - margin})`)
+            .call(d3.axisBottom(xScale));
+
+        // Add y-axis
+        svg.selectAll(".y-axis")
+            .data([0])
+            .enter().append("g")
+            .attr("class", "y-axis")
+            .attr("transform", `translate(${margin},0)`)
+            .call(d3.axisLeft(yScale));
+    }
+
+
+
+
+
+
     fetchUserData();
-    fetchAuditData();
+    //fetchAuditData();
 
 
 </script>
