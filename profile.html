@@ -4,90 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profile</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 0;
-        }
-
-        .container {
-            max-width: 800px;
-            margin: 20px auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        h1 {
-            text-align: center;
-            color: #333;
-        }
-
-        .section {
-            margin-bottom: 20px;
-        }
-
-        .section h2 {
-            font-size: 18px;
-            color: #555;
-            margin-bottom: 10px;
-        }
-
-        .logout-btn {
-            display: block;
-            margin: 20px auto;
-            padding: 10px 20px;
-            background-color: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            text-align: center;
-            text-decoration: none;
-        }
-
-        .logout-btn:hover {
-            background-color: #a71d2a;
-        }
-
-        .graphs {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-        }
-
-        .graph {
-            flex: 1;
-            min-width: 300px;
-            height: 200px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            padding: 10px;
-            position: relative;
-        }
-
-        .graph path {
-            stroke-linecap: round;
-            stroke-width: 2;
-        }
-
-        .graph text {
-            font-size: 12px;
-            fill: #555;
-        }
-
-        .graph line {
-            stroke: #ccc;
-            stroke-width: 1;
-        }
-
-        .graph rect:hover {
-            fill: #1c7c1c;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="container">
@@ -105,11 +22,9 @@
     <!-- Statistics Section -->
     <div class="section" id="statistics">
         <h2>Statistics</h2>
-        <div class="graphs">
-            <!-- Line Graph for XP Over Time -->
-            <svg class="graph" id="xp-graph"></svg>
+        <div class="graphs" id="xp-graph">
             <!-- Bar Graph for XP by Project -->
-            <svg class="graph" id="audit-ratio-graph"></svg>
+            <svg class="graph" id="audit-ratio-graph">Sorry, your browser does not support inline SVG.  </svg>
         </div>
     </div>
 
@@ -143,18 +58,48 @@
 
             if (response && response.data) {
                 displayUserData(response.data.user[0]);
-                generateGraphs(response.data);
+
                 console.log(response);
 
                 let extractedData = extractAndGroupData(response.data);
-                console.log(extractedData);
+                console.log("extractedData: ", extractedData);
 
                 let xp = xpEarnedOverTime(extractedData);
                 console.log(xp);
+                createSvgPolylineGraph(xp, "xp-graph")
+
 
                 let projects = groupByProject(extractedData);
                 console.log(projects)
 
+
+            }
+        } catch (error) {
+            alert("Error fetching user data.");
+            console.error('Error:', error);
+            window.location.href = 'index.html';
+        }
+    }
+
+    async function fetchAuditData() {
+        try {
+            const query = `
+                {
+                    results(where: { auditorId: { _eq: "${userid}" } }) {
+                        id
+                        score
+                        feedback
+                    }
+                }`;
+
+            const response = await makeGraphQLRequest(query, jwt);
+
+            console.log("response");
+            console.log(response);
+
+            if (response && response.data) {
+                console.log("response");
+                console.log(response);
 
             }
         } catch (error) {
@@ -182,46 +127,6 @@
             document.getElementById('user-email').textContent = user.attrs?.email || 'N/A';
             document.getElementById('audit-ratio').textContent = user.auditRatio?.toFixed(2) || 'N/A';
         }
-    }
-
-    function generateGraphs(data) {
-        const xpGraph = document.getElementById('xp-graph');
-        const auditGraph = document.getElementById('audit-ratio-graph');
-
-        const sortedData = data.transaction.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-        const xpValues = sortedData.map(d => d.amount);
-
-        // Line Graph for XP Over Time
-        const linePath = xpValues.reduce((path, value, index) => {
-            const x = (index + 1) * 30;
-            const y = 200 - value / 100;
-            return `${path} L ${x} ${y}`;
-        }, `M 10 200`);
-
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        line.setAttribute('d', linePath);
-        line.setAttribute('stroke', '#007BFF');
-        line.setAttribute('fill', 'none');
-        xpGraph.appendChild(line);
-
-        // Bar Graph for XP by Project
-        const projectData = {};
-        sortedData.forEach(d => {
-            projectData[d.path] = (projectData[d.path] || 0) + d.amount;
-        });
-
-        const barWidth = 25;
-        Object.values(projectData).forEach((value, index) => {
-            const x = index * (barWidth + 5) + 10;
-            const barHeight = value / 100;
-            const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            bar.setAttribute('x', x);
-            bar.setAttribute('y', 200 - barHeight);
-            bar.setAttribute('width', barWidth);
-            bar.setAttribute('height', barHeight);
-            bar.setAttribute('fill', '#28a745');
-            auditGraph.appendChild(bar);
-        });
     }
 
     async function makeGraphQLRequest(query, token) {
@@ -269,8 +174,109 @@
         }, {});
     }
 
+    function createSvgPolylineGraph(data, containerId, width = 800, height = 400, padding = 50) {
+        // Sort data by date
+        data.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Parse the dates and extract min/max values
+        const dates = data.map(d => new Date(d.date));
+        const xps = data.map(d => d.xp);
+        const minDate = Math.min(...dates);
+        const maxDate = Math.max(...dates);
+        const minXp = Math.min(...xps);
+        const maxXp = Math.max(...xps);
+
+        // Scaling functions
+        const xScale = (date) => {
+            const normalized = (date - minDate) / (maxDate - minDate);
+            return padding + normalized * (width - 2 * padding);
+        };
+
+        const yScale = (xp) => {
+            const normalized = (xp - minXp) / (maxXp - minXp);
+            return height - padding - normalized * (height - 2 * padding);
+        };
+
+        // Generate points for the polyline
+        const points = data.map(d => `${xScale(new Date(d.date))},${yScale(d.xp)}`).join(' ');
+
+        // Create SVG element
+        const svgNS = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(svgNS, "svg");
+        svg.setAttribute("width", width);
+        svg.setAttribute("height", height);
+        svg.style.border = "1px solid black";
+
+        // Create polyline
+        const polyline = document.createElementNS(svgNS, "polyline");
+        polyline.setAttribute("points", points);
+        polyline.setAttribute("fill", "none");
+        polyline.setAttribute("stroke", "blue");
+        polyline.setAttribute("stroke-width", 2);
+        svg.appendChild(polyline);
+
+        // Create axes
+        const createLine = (x1, y1, x2, y2, color = "black") => {
+            const line = document.createElementNS(svgNS, "line");
+            line.setAttribute("x1", x1);
+            line.setAttribute("y1", y1);
+            line.setAttribute("x2", x2);
+            line.setAttribute("y2", y2);
+            line.setAttribute("stroke", color);
+            line.setAttribute("stroke-width", 1);
+            return line;
+        };
+
+        // X-axis
+        svg.appendChild(createLine(padding, height - padding, width - padding, height - padding));
+
+        // Y-axis
+        svg.appendChild(createLine(padding, height - padding, padding, padding));
+
+        // Add labels
+        const createText = (x, y, text, anchor = "middle", size = "12px") => {
+            const label = document.createElementNS(svgNS, "text");
+            label.setAttribute("x", x);
+            label.setAttribute("y", y);
+            label.setAttribute("font-size", size);
+            label.setAttribute("text-anchor", anchor);
+            label.textContent = text;
+            return label;
+        };
+
+        // X-axis labels
+        const xTicks = 5;
+        for (let i = 0; i <= xTicks; i++) {
+            const date = new Date(minDate + (i / xTicks) * (maxDate - minDate));
+            const xPos = xScale(date);
+            svg.appendChild(createLine(xPos, height - padding, xPos, height - padding + 5));
+            svg.appendChild(createText(xPos, height - padding + 20, date.toLocaleDateString(), "middle"));
+        }
+
+        // Y-axis labels
+        const yTicks = 5;
+        for (let i = 0; i <= yTicks; i++) {
+            const xp = minXp + (i / yTicks) * (maxXp - minXp);
+            const yPos = yScale(xp);
+            svg.appendChild(createLine(padding - 5, yPos, padding, yPos));
+            svg.appendChild(createText(padding - 10, yPos + 4, xp.toFixed(0), "end"));
+        }
+
+        // Axis titles
+        svg.appendChild(createText(width / 2, height - 10, "Date", "middle", "16px"));
+        svg.appendChild(createText(20, height / 2, "XP", "middle", "16px"));
+
+        // Add to container
+        const container = document.getElementById(containerId);
+        container.innerHTML = ""; // Clear previous content
+        container.appendChild(svg);
+    }
+
+
 
     fetchUserData();
+    fetchAuditData();
+
 
 </script>
 </body>
